@@ -2,9 +2,10 @@ package main
 
 import (
 	"archive/zip"
-
 	"encoding/json"
 	"fmt"
+	"gsutil/config"
+	"gsutil/middleware"
 	"io"
 	"io/fs"
 	"io/ioutil"
@@ -14,6 +15,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type FileInfo struct {
@@ -25,22 +28,24 @@ type FileInfo struct {
 }
 
 func main() {
-	/* r := mux.NewRouter()
-	r.HandleFunc("/", scriptHandler).Methods("GET", "OPTIONS")
-	r.HandleFunc("/list", listDir).Methods("GET") */
-	http.HandleFunc("/zip", scriptHandler)
-	http.HandleFunc("/list", listDir)
+	r := gin.Default()
+	firebaseAuth := config.SetupFirebase()
+	r.Use(func(c *gin.Context) {
+		// set firebase auth
+		c.Set("firebaseAuth", firebaseAuth)
+	})
+	r.Use(middleware.AuthMiddleware)
+	r.POST("/zip", gin.WrapF(scriptHandler))
+	r.GET("/list", gin.WrapF(listDir))
+	/* http.HandleFunc("/zip", scriptHandler)
+	http.HandleFunc("/list", listDir) */
 	// Determine port for HTTP service.
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8081" //Change this when testing locally
 		fmt.Printf("defaulting to port %s", port)
 	}
-	// Start HTTP server.
-	log.Printf("listening on port %s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatal(err)
-	}
+	r.Run(":" + port)
 	//log.Fatal(http.ListenAndServe(port, r))
 }
 
@@ -53,48 +58,17 @@ func scriptHandler(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["folder"]
 	if !ok || len(keys[0]) < 1 {
 		http.Error(w, "Folder needs to be specified.", 404)
-		return
 	}
 	folder := keys[0]
 	dir, _ := os.Getwd()
 	cmd := exec.CommandContext(r.Context(), "/bin/bash", "script.sh", folder, dir)
-	//cmd := exec.Command("gsutil cp -r gs://code-red-app-313517.appspot.com/" + string(folder) + " " + dir)
 	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()
 	if err != nil {
 		log.Printf("Command.Output: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
 	}
 	fmt.Println(out)
-	/* buf := new(bytes.Buffer)
-	writer := zip.NewWriter(buf)
-	if err := zipSource(writer, folder, folder+".zip"); err != nil {
-		log.Fatal(err)
-	} */
-	/* w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.zip\"", folder)) */
-	//sEnc := b64.StdEncoding.EncodeToString(buf.Bytes())
-	//fmt.Fprintf(w, sEnc)
-	/* baseFolder := dir + "/" + folder + "/"
-	output := folder + ".zip" */
-	/* outfile, err := os.Create(folder + ".zip")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer outfile.Close()
-	zw := zip.NewWriter(outfile)
-	defer zw.Close() */
-	//addFilesToDir(zw, baseFolder, "")
-	/* files, err := listFiles(dir + "/" + folder)
-	if err != nil {
-		fmt.Print(err)
-	}
-
-	zipMe(files, output)
-	for _, f := range files {
-		fmt.Println(f)
-	} */
 
 	files, err := ioutil.ReadDir("/app/" + folder)
 	if err != nil {
@@ -103,15 +77,6 @@ func scriptHandler(w http.ResponseWriter, r *http.Request) {
 	if err := ZipFiles(output, folder, files); err != nil {
 		log.Fatal(err)
 	}
-	/* for _, entry := range files {
-
-		cf, err := zw.Create(entry.Name())
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		fmt.Println("file: ", entry)
-	} */
 	http.ServeFile(w, r, output)
 	fmt.Fprintf(w, "Done!")
 }
@@ -123,10 +88,7 @@ func listFiles(root string) ([]string, error) {
 
 		if !info.IsDir() {
 			files = append(files, path)
-			/* newpath := strings.Replace(path, "/app", "", -1)
-			files = append(files, newpath) */
 		}
-		//header.Name, err = filepath.Rel(filepath.Dir(source), path)
 
 		return nil
 	})
@@ -187,7 +149,6 @@ func ZipFiles(filename string, foldername string, files []fs.FileInfo) error {
 	defer newZipFile.Close()
 	zipWriter := zip.NewWriter(newZipFile)
 	defer zipWriter.Close()
-	//files, err := ioutil.ReadDir(directoryPath)
 	if err != nil {
 		return err
 	}
@@ -195,40 +156,6 @@ func ZipFiles(filename string, foldername string, files []fs.FileInfo) error {
 		return err
 	}
 	return nil
-}
-func AddFileToZip(zipWriter *zip.Writer, filename string) error {
-
-	fileToZip, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	defer fileToZip.Close()
-
-	// Get the file information
-	info, err := fileToZip.Stat()
-	if err != nil {
-		return err
-	}
-
-	header, err := zip.FileInfoHeader(info)
-	if err != nil {
-		return err
-	}
-
-	// Using FileInfoHeader() above only uses the basename of the file. If we want
-	// to preserve the folder structure we can overwrite this with the full path.
-	header.Name = filename
-
-	// Change to deflate to gain better compression
-	// see http://golang.org/pkg/archive/zip/#pkg-constants
-	header.Method = zip.Deflate
-
-	writer, err := zipWriter.CreateHeader(header)
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(writer, fileToZip)
-	return err
 }
 
 func zipSource(w *zip.Writer, source, target string) error {
@@ -316,12 +243,6 @@ func addFilesToDir(w *zip.Writer, directoryPath, zipName string) error {
 			fmt.Println("Recursing and Adding SubDir: " + file.Name())
 			fmt.Println("Recursing and Adding SubDir: " + newBase)
 			addFilesToDir(w, newBase, zipName+file.Name()+"/")
-
-			/* fh := &zip.FileHeader{
-				Name:     entry.Name(),
-				Modified: time.Now(),
-				Method:   8,
-			} */
 		}
 	}
 	return nil
