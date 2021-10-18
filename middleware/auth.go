@@ -11,8 +11,7 @@ import (
 
 func AuthMiddleware(c *gin.Context) {
 	firebaseAuth := c.MustGet("firebaseAuth").(*auth.Client)
-
-	authorizationToken := c.GetHeader("authorization")
+	authorizationToken := c.GetHeader("Authorization")
 	idToken := strings.TrimSpace(strings.Replace(authorizationToken, "Bearer", "", 1))
 	if idToken == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Id token not available"})

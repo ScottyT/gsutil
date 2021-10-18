@@ -1,3 +1,6 @@
+# Usage:
+# /bin/bash local-runner.sh script.sh
+##
 #!/usr/bin/env bash
 set -eo pipefail
 

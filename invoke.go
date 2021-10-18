@@ -16,7 +16,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/spf13/viper"
 )
 
 type FileInfo struct {
@@ -27,18 +29,51 @@ type FileInfo struct {
 	IsDir   bool
 }
 
+func contains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Usage for this is: viperEnvKey("KEY")
+func viperEnvKey(key string) string {
+	viper.SetConfigFile("./.env")
+	err := viper.ReadInConfig()
+	if err != nil {
+		log.Fatalf("Error while reading config file %s", err)
+	}
+	value, ok := viper.Get(key).(string)
+	if !ok {
+		log.Fatalf("Invalid type assertion")
+	}
+	return value
+}
 func main() {
 	r := gin.Default()
+	r.Use(cors.New(cors.Config{
+		AllowMethods:  []string{"GET, POST, PUT, DELETE, OPTIONS"},
+		AllowHeaders:  []string{"Origin, X-Requested-With, Content-Type, Accept, Authorization"},
+		ExposeHeaders: []string{"Content-Length"},
+		AllowOriginFunc: func(origin string) bool {
+			allowedOrigins := []string{"http://localhost:3000", viperEnvKey("WEB_APP_URL")}
+			return contains(allowedOrigins, origin)
+		},
+	}))
 	firebaseAuth := config.SetupFirebase()
 	r.Use(func(c *gin.Context) {
 		// set firebase auth
 		c.Set("firebaseAuth", firebaseAuth)
 	})
 	r.Use(middleware.AuthMiddleware)
+	r.GET("/welcome", func(c *gin.Context) {
+		c.String(http.StatusOK, "Hello world")
+	})
 	r.POST("/zip", gin.WrapF(scriptHandler))
 	r.GET("/list", gin.WrapF(listDir))
-	/* http.HandleFunc("/zip", scriptHandler)
-	http.HandleFunc("/list", listDir) */
 	// Determine port for HTTP service.
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -46,13 +81,10 @@ func main() {
 		fmt.Printf("defaulting to port %s", port)
 	}
 	r.Run(":" + port)
-	//log.Fatal(http.ListenAndServe(port, r))
 }
 
 func scriptHandler(w http.ResponseWriter, r *http.Request) {
 	output := "output"
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.zip\"", output))
 	keys, ok := r.URL.Query()["folder"]
@@ -62,6 +94,7 @@ func scriptHandler(w http.ResponseWriter, r *http.Request) {
 	folder := keys[0]
 	dir, _ := os.Getwd()
 	cmd := exec.CommandContext(r.Context(), "/bin/bash", "script.sh", folder, dir)
+	//cmd := exec.Command("gsutil cp -r gs://" + viperEnvKey("STORAGE_BUCKET") + "/" + string(folder) + " " + dir) USED FOR LOCAL TESTING
 	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()
 	if err != nil {
@@ -70,7 +103,7 @@ func scriptHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Println(out)
 
-	files, err := ioutil.ReadDir("/app/" + folder)
+	files, err := ioutil.ReadDir(dir + "/" + folder)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -80,69 +113,10 @@ func scriptHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, output)
 	fmt.Fprintf(w, "Done!")
 }
-func listFiles(root string) ([]string, error) {
-	var files []string
 
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		fmt.Printf("Crawling: %#v\n", path)
-
-		if !info.IsDir() {
-			files = append(files, path)
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return files, nil
-
-}
-
-func zipMe(filepaths []string, target string) error {
-
-	flags := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-	file, err := os.OpenFile(target, flags, 0644)
-
-	if err != nil {
-		return fmt.Errorf("Failed to open zip for writing: %s", err)
-	}
-	defer file.Close()
-
-	zipw := zip.NewWriter(file)
-	defer zipw.Close()
-
-	for _, filename := range filepaths {
-		if err := addFileToZip(filename, zipw); err != nil {
-			return fmt.Errorf("Failed to add file %s to zip: %s", filename, err)
-		}
-	}
-	return nil
-
-}
-
-func addFileToZip(filename string, zipw *zip.Writer) error {
-	file, err := os.Open(filename)
-
-	if err != nil {
-		return fmt.Errorf("Error opening file %s: %s", filename, err)
-	}
-	defer file.Close()
-
-	wr, err := zipw.Create(filename)
-	if err != nil {
-
-		return fmt.Errorf("Error adding file; '%s' to zip : %s", filename, err)
-	}
-
-	if _, err := io.Copy(wr, file); err != nil {
-		return fmt.Errorf("Error writing %s to zip: %s", filename, err)
-	}
-
-	return nil
-}
 func ZipFiles(filename string, foldername string, files []fs.FileInfo) error {
 	newZipFile, err := os.Create(filename)
+	dir, _ := os.Getwd()
 	if err != nil {
 		return err
 	}
@@ -152,7 +126,7 @@ func ZipFiles(filename string, foldername string, files []fs.FileInfo) error {
 	if err != nil {
 		return err
 	}
-	if err = zipSource(zipWriter, "/app/"+foldername, "output"); err != nil {
+	if err = zipSource(zipWriter, dir+"/"+foldername, "output"); err != nil {
 		return err
 	}
 	return nil
@@ -248,8 +222,6 @@ func addFilesToDir(w *zip.Writer, directoryPath, zipName string) error {
 	return nil
 }
 func listDir(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	keys, ok := r.URL.Query()["folder"]
 	if !ok || len(keys[0]) < 1 {
 		http.Error(w, "Folder needs to be specified.", 404)
@@ -280,13 +252,4 @@ func listDir(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 	fmt.Fprintf(w, string(output))
-}
-
-func errorResponse(w http.ResponseWriter, message string, httpStatusCode int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(httpStatusCode)
-	resp := make(map[string]string)
-	resp["message"] = message
-	jsonResp, _ := json.Marshal(resp)
-	w.Write(jsonResp)
 }

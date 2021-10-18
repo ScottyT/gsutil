@@ -10,10 +10,14 @@ COPY go.* ./
 RUN go mod download
 
 # Copy local code to the container image.
-COPY invoke.go ./
+COPY . ./
 
 # Build the binary.
 RUN go build -mod=readonly -v -o server
+
+EXPOSE 8081
+ENV HOST=0.0.0.0
+ENV PORT=8081
 
 # Use a gcloud image based on debian:buster-slim for a lean production container.
 # https://docs.docker.com/develop/develop-images/multistage-build/#use-multi-stage-builds
