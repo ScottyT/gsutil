@@ -11,6 +11,7 @@ RUN go mod download
 
 # Copy local code to the container image.
 COPY . ./
+COPY ./env /app/
 
 # Build the binary.
 RUN go build -mod=readonly -v -o server

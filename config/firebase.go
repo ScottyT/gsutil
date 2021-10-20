@@ -7,6 +7,7 @@ import (
 
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/auth"
+	"google.golang.org/api/option"
 )
 
 func SetupFirebase() *auth.Client {
@@ -16,13 +17,12 @@ func SetupFirebase() *auth.Client {
 		panic("Unable to load service account file")
 	}
 	// THIS SHOULD ONLY BE THERE FOR LOCAL USAGE
-	//opt := option.WithCredentialsFile(serviceAccountKeyFilePath)
+	opt := option.WithCredentialsFile(serviceAccountKeyFilePath)
 	//Firebase admin SDK initialization
-	app, err := firebase.NewApp(context.Background(), nil)
+	app, err := firebase.NewApp(context.Background(), nil, opt)
 	if err != nil {
 		panic("Firebase load error")
 	}
-	fmt.Print("app:", app)
 	//Firebase Auth
 	auth, err := app.Auth(context.Background())
 	if err != nil {

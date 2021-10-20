@@ -28,6 +28,9 @@ type FileInfo struct {
 	ModTime time.Time
 	IsDir   bool
 }
+type FolderInfo struct {
+	FolderPath string `json:"folderPath"`
+}
 
 func contains(s []string, str string) bool {
 	for _, v := range s {
@@ -41,7 +44,7 @@ func contains(s []string, str string) bool {
 
 // Usage for this is: viperEnvKey("KEY")
 func viperEnvKey(key string) string {
-	viper.SetConfigFile("./.env")
+	viper.SetConfigFile("./env/.env")
 	err := viper.ReadInConfig()
 	if err != nil {
 		log.Fatalf("Error while reading config file %s", err)
@@ -59,7 +62,7 @@ func main() {
 		AllowHeaders:  []string{"Origin, X-Requested-With, Content-Type, Accept, Authorization"},
 		ExposeHeaders: []string{"Content-Length"},
 		AllowOriginFunc: func(origin string) bool {
-			allowedOrigins := []string{"http://localhost:3000", viperEnvKey("WEB_APP_URL")}
+			allowedOrigins := []string{"http://localhost:3000", viperEnvKey("KEY")}
 			return contains(allowedOrigins, origin)
 		},
 	}))
@@ -70,7 +73,7 @@ func main() {
 	})
 	r.Use(middleware.AuthMiddleware)
 	r.GET("/welcome", func(c *gin.Context) {
-		c.String(http.StatusOK, "Hello world")
+		c.String(http.StatusOK, "Welcome")
 	})
 	r.POST("/zip", gin.WrapF(scriptHandler))
 	r.GET("/list", gin.WrapF(listDir))
@@ -84,17 +87,18 @@ func main() {
 }
 
 func scriptHandler(w http.ResponseWriter, r *http.Request) {
-	output := "output"
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.zip\"", output))
-	keys, ok := r.URL.Query()["folder"]
-	if !ok || len(keys[0]) < 1 {
-		http.Error(w, "Folder needs to be specified.", 404)
+	var output FolderInfo
+	if err := json.NewDecoder(r.Body).Decode(&output); err != nil {
+		log.Fatal(err)
 	}
-	folder := keys[0]
+	zipFolderName := "job_" + output.FolderPath + "_files.zip"
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", string(zipFolderName)))
+
+	folder := output.FolderPath
 	dir, _ := os.Getwd()
 	cmd := exec.CommandContext(r.Context(), "/bin/bash", "script.sh", folder, dir)
-	//cmd := exec.Command("gsutil cp -r gs://" + viperEnvKey("STORAGE_BUCKET") + "/" + string(folder) + " " + dir) USED FOR LOCAL TESTING
+	//cmd := exec.Command("gsutil cp -r gs://" + viperEnvKey("STORAGE_BUCKET") + "/" + string(folder) + " job_files/") //USED FOR LOCAL TESTING
 	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()
 	if err != nil {
@@ -107,11 +111,11 @@ func scriptHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := ZipFiles(output, folder, files); err != nil {
+	if err := ZipFiles(zipFolderName, folder, files); err != nil {
 		log.Fatal(err)
 	}
-	http.ServeFile(w, r, output)
-	fmt.Fprintf(w, "Done!")
+	http.ServeFile(w, r, zipFolderName)
+	fmt.Fprint(w, "Done downloading the job files!")
 }
 
 func ZipFiles(filename string, foldername string, files []fs.FileInfo) error {
@@ -126,7 +130,7 @@ func ZipFiles(filename string, foldername string, files []fs.FileInfo) error {
 	if err != nil {
 		return err
 	}
-	if err = zipSource(zipWriter, dir+"/"+foldername, "output"); err != nil {
+	if err = zipSource(zipWriter, dir+"/"+foldername, filename); err != nil {
 		return err
 	}
 	return nil
@@ -142,7 +146,7 @@ func zipSource(w *zip.Writer, source, target string) error {
 
 	// 2. Go through all the files of the source
 	return filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
-		fmt.Printf("Crawling: %#v\n", path)
+		//fmt.Printf("Crawling: %#v\n", path)
 		if err != nil {
 			return err
 		}
