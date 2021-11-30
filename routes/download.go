@@ -28,10 +28,10 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&output); err != nil {
 		log.Fatal(err)
 	}
-	if config.ViperEnvKey("ENV") == "development" {
-		Bucket = config.ViperEnvKey("STORAGE_BUCKET")
-	} else {
+	if os.Getenv("ENV") == "production" {
 		Bucket = os.Getenv("STORAGE_BUCKET")
+	} else {
+		Bucket = config.ViperEnvKey("STORAGE_BUCKET")
 	}
 	zipFolderName := "job_" + output.FolderPath + "_files.zip"
 	w.Header().Set("Content-Type", "application/zip")
@@ -46,8 +46,6 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		respMessage: "Files downloaded!",
 	}
 	val, message, _ := ExecCommand(c)
-	//cmd := exec.CommandContext(r.Context(), "/bin/bash", "script.sh", folder, dir)
-	//cmd := exec.Command("gsutil cp -r gs://" + config.ViperEnvKey("STORAGE_BUCKET") + "/" + string(folder) + " job_files/") //USED FOR LOCAL TESTING
 
 	files, err := ioutil.ReadDir(dir + "/" + folder)
 	if err != nil {

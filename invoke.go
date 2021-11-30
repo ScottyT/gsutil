@@ -32,7 +32,7 @@ func main() {
 		AllowHeaders:  []string{"Origin, X-Requested-With, Content-Type, Accept, Authorization"},
 		ExposeHeaders: []string{"Content-Length"},
 		AllowOriginFunc: func(origin string) bool {
-			allowedOrigins := []string{"http://localhost:3000", config.ViperEnvKey("WEB_APP_URL")}
+			allowedOrigins := []string{"http://localhost:3000", os.Getenv("WEB_APP_URL")}
 			return contains(allowedOrigins, origin)
 		},
 	}))

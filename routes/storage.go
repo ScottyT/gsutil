@@ -34,22 +34,23 @@ func MovingObjects(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&output); err != nil {
 		log.Fatal(err)
 	}
-	if config.ViperEnvKey("ENV") == "development" {
-		Bucket = config.ViperEnvKey("STORAGE_BUCKET")
-	} else {
+	if os.Getenv("ENV") == "production" {
 		Bucket = os.Getenv("STORAGE_BUCKET")
+	} else {
+		Bucket = config.ViperEnvKey("STORAGE_BUCKET")
 	}
+	c := &command{}
+	var message string
 	for _, item := range output.SourceFiles {
-		fmt.Println("item: ", item)
 		//item is the prefix from client-side
-		c := &command{
+		c = &command{
 			name:        "moving",
-			args:        []string{"-m", "cp", "-r", "gs://" + Bucket + "/" + item, "gs://" + Bucket + "/" + output.DestFolder},
+			args:        []string{"mv", "gs://" + Bucket + "/" + item + "*", "gs://" + Bucket + "/" + output.DestFolder},
 			respMessage: "Files successfully moved!",
 		}
-		val, message, _ := ExecCommand(c)
-		fmt.Fprint(w, val, message)
+		_, message, _ = ExecCommand(c)
 	}
+	fmt.Fprint(w, message)
 }
 
 func ListDir(w http.ResponseWriter, r *http.Request) {
