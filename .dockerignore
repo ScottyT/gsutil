@@ -1,0 +1,5 @@
+*.sh
+.gitignore
+.gcloudignore
+.dockerignore
+vendor/

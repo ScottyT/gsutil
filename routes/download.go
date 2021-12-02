@@ -24,15 +24,19 @@ type FileInfo struct {
 }
 
 func DownloadHandler(w http.ResponseWriter, r *http.Request) {
+	env, err := config.LoadConfig("./")
+	if err != nil {
+		log.Fatal("cannot load config: ", err)
+	}
 	var output FolderInfo
 	if err := json.NewDecoder(r.Body).Decode(&output); err != nil {
 		log.Fatal(err)
 	}
-	if os.Getenv("ENV") == "production" {
+	/* if os.Getenv("ENV") == "production" {
 		Bucket = os.Getenv("STORAGE_BUCKET")
 	} else {
 		Bucket = config.ViperEnvKey("STORAGE_BUCKET")
-	}
+	} */
 	zipFolderName := "job_" + output.FolderPath + "_files.zip"
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", string(zipFolderName)))
@@ -42,7 +46,7 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	c := &command{
 		name:        "download",
-		args:        []string{"-m", "cp", "-r", "gs://" + Bucket + "/" + folder, dir},
+		args:        []string{"-m", "cp", "-r", "gs://" + env.StorageBucket + "/" + folder, dir},
 		respMessage: "Files downloaded!",
 	}
 	val, message, _ := ExecCommand(c)

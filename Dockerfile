@@ -27,8 +27,8 @@ WORKDIR /app
 
 # Copy the binary to the production image from the builder stage.
 COPY --from=builder /app/server /app/server
-COPY *.sh /app/
-RUN chmod +x /app/*.sh
+COPY code-red.json /app/
+COPY app.env /app/
 
 # Run the web service on container startup.
 CMD ["/app/server"]

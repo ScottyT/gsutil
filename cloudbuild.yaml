@@ -1,4 +1,4 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/code-red-app-313517/zip_all', '.']
+    args: ['build', '-t', 'gcr.io/${PROJECT_ID}/zip_all', '.']
 images: ['gcr.io/code-red-app-313517/zip_all:latest']

@@ -2,38 +2,38 @@ package config
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
-	firebase "firebase.google.com/go"
-	"firebase.google.com/go/auth"
+	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/auth"
 	"google.golang.org/api/option"
 )
 
 func SetupFirebase() *auth.Client {
+	env, err := LoadConfig("./")
+	if err != nil {
+		log.Fatal("cannot load config: ", err)
+	}
 	var opt option.ClientOption
-	serviceAccountKeyFilePath, err := filepath.Abs("../code-red.json")
-	fmt.Println("server account:", serviceAccountKeyFilePath)
+	dir, _ := os.Getwd()
+	serviceAccountKeyFilePath, err := filepath.Abs(dir + "/" + env.CredentialFile)
 	if err != nil {
 		panic("Unable to load service account file")
 	}
-	if os.Getenv("ENV") == "production" {
-		opt = nil
-	} else {
-		// THIS SHOULD ONLY BE THERE FOR LOCAL USAGE
-		opt = option.WithCredentialsFile(serviceAccountKeyFilePath)
-	}
+	opt = option.WithCredentialsFile(serviceAccountKeyFilePath)
+	config := &firebase.Config{ProjectID: env.ProjectId}
 	//Firebase admin SDK initialization
-	app, err := firebase.NewApp(context.Background(), nil, opt)
+	app, err := firebase.NewApp(context.Background(), config, opt)
 	if err != nil {
-		panic("Firebase load error")
+		log.Fatalf("error initializing app: %v\n", err)
 	}
-	fmt.Println(app)
+
 	//Firebase Auth
 	auth, err := app.Auth(context.Background())
 	if err != nil {
-		panic("Firebase auth load error")
+		log.Fatalf("error getting Auth client: %v\n", err)
 	}
 
 	return auth

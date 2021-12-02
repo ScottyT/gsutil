@@ -6,16 +6,24 @@ import (
 	"github.com/spf13/viper"
 )
 
+type Config struct {
+	WebAppUrl      string `mapstructure:"WEB_APP_URL"`
+	StorageBucket  string `mapstructure:"STORAGE_BUCKET"`
+	CredentialFile string `mapstructure:"CREDENTIAL_FILE"`
+	ProjectId      string `mapstructure:"PROJECT_ID"`
+}
+
 // Usage for this is: viperEnvKey("KEY")
-func ViperEnvKey(key string) string {
-	viper.SetConfigFile("./.env")
-	err := viper.ReadInConfig()
+func LoadConfig(path string) (config Config, err error) {
+	viper.AddConfigPath(path)
+	viper.SetConfigName("app")
+	viper.SetConfigType("env")
+	viper.AutomaticEnv()
+	err = viper.ReadInConfig()
 	if err != nil {
 		fmt.Printf("Error while reading config file %s", err)
+		return
 	}
-	value, ok := viper.Get(key).(string)
-	if !ok {
-		fmt.Printf("Invalid type assertion")
-	}
-	return value
+	err = viper.Unmarshal(&config)
+	return
 }

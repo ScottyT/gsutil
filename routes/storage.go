@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"gsutil/config"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 )
 
 var Bucket string
@@ -30,22 +30,26 @@ func ExecCommand(com *command) (string, string, *bytes.Buffer) {
 	return "", "", nil
 }
 func MovingObjects(w http.ResponseWriter, r *http.Request) {
+	env, err := config.LoadConfig("./")
+	if err != nil {
+		log.Fatal("cannot load config: ", err)
+	}
 	var output FolderInfo
 	if err := json.NewDecoder(r.Body).Decode(&output); err != nil {
 		log.Fatal(err)
 	}
-	if os.Getenv("ENV") == "production" {
+	/* if os.Getenv("ENV") == "production" {
 		Bucket = os.Getenv("STORAGE_BUCKET")
 	} else {
 		Bucket = config.ViperEnvKey("STORAGE_BUCKET")
-	}
+	} */
 	c := &command{}
 	var message string
 	for _, item := range output.SourceFiles {
 		//item is the prefix from client-side
 		c = &command{
 			name:        "moving",
-			args:        []string{"mv", "gs://" + Bucket + "/" + item + "*", "gs://" + Bucket + "/" + output.DestFolder},
+			args:        []string{"mv", "gs://" + env.StorageBucket + "/" + item + "*", "gs://" + env.StorageBucket + "/" + output.DestFolder},
 			respMessage: "Files successfully moved!",
 		}
 		_, message, _ = ExecCommand(c)
@@ -54,16 +58,20 @@ func MovingObjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func ListDir(w http.ResponseWriter, r *http.Request) {
-	keys, ok := r.URL.Query()["folder"]
-	if !ok || len(keys[0]) < 1 {
-		http.Error(w, "Folder needs to be specified.", 404)
-		return
-	}
-	folder := keys[0]
 	dir, _ := os.Getwd()
-	fmt.Print(dir)
-	list := []FileInfo{}
-	files, err := ioutil.ReadDir("/app/" + folder)
+	err := filepath.Walk(dir+"/", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		fmt.Fprintf(w, "dir: %v: name: %s\n", info.IsDir(), path)
+		return nil
+	})
+	if err != nil {
+		fmt.Println(err)
+	}
+	//list := []FileInfo{}
+	/* files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -76,12 +84,11 @@ func ListDir(w http.ResponseWriter, r *http.Request) {
 			IsDir:   entry.IsDir(),
 		}
 		list = append(list, f)
-		fmt.Println(entry)
-		log.Writer()
-	}
-	output, err := json.Marshal(list)
+
+	} */
+	/* output, err := json.Marshal(list)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Fprintf(w, string(output))
+	fmt.Fprintf(w, string(output)) */
 }
