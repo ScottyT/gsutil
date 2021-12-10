@@ -32,11 +32,6 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&output); err != nil {
 		log.Fatal(err)
 	}
-	/* if os.Getenv("ENV") == "production" {
-		Bucket = os.Getenv("STORAGE_BUCKET")
-	} else {
-		Bucket = config.ViperEnvKey("STORAGE_BUCKET")
-	} */
 	zipFolderName := "job_" + output.FolderPath + "_files.zip"
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", string(zipFolderName)))

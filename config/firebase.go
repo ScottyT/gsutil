@@ -6,12 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"cloud.google.com/go/storage"
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
 	"google.golang.org/api/option"
 )
 
-func SetupFirebase() *auth.Client {
+func SetupFirebase() (*auth.Client, *storage.Client) {
 	env, err := LoadConfig("./")
 	if err != nil {
 		log.Fatal("cannot load config: ", err)
@@ -23,7 +24,7 @@ func SetupFirebase() *auth.Client {
 		panic("Unable to load service account file")
 	}
 	opt = option.WithCredentialsFile(serviceAccountKeyFilePath)
-	config := &firebase.Config{ProjectID: env.ProjectId}
+	config := &firebase.Config{ProjectID: env.ProjectId, StorageBucket: env.StorageBucket}
 	//Firebase admin SDK initialization
 	app, err := firebase.NewApp(context.Background(), config, opt)
 	if err != nil {
@@ -35,6 +36,14 @@ func SetupFirebase() *auth.Client {
 	if err != nil {
 		log.Fatalf("error getting Auth client: %v\n", err)
 	}
+	clientStorage, err := storage.NewClient(context.Background(), opt)
+	if err != nil {
+		log.Fatalf("error getting Storage client: %v\n", err)
+	}
+	/* storage, err := app.Storage(context.Background())
+	if err != nil {
+		log.Fatalf("error getting Storage client: %v\n", err)
+	} */
 
-	return auth
+	return auth, clientStorage
 }

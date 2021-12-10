@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"time"
 )
 
 type FolderInfo struct {
@@ -13,15 +12,25 @@ type FolderInfo struct {
 	SourceFiles []string `json:"sourceFiles"`
 	DestFolder  string   `json:"destFolder"`
 }
+type FileResponse struct {
+	Prefix string `json:"prefix"`
+	Delim  string `json:"delim"`
+}
 type FilesList struct {
 	Files []FilesList `json:"files"`
 }
-type ImageInfo struct {
-	Name    string
-	Size    int64
-	Mode    os.FileMode
-	ModTime time.Time
-	IsDir   bool
+type ImageObjectsInfo struct {
+	name      string
+	imageUrl  string
+	subfolder string
+}
+type FolderObjectsInfo struct {
+	name string
+	path string
+}
+type FileObjectsInfo struct {
+	folders []FolderObjectsInfo
+	images  []ImageObjectsInfo
 }
 
 type command struct {
@@ -71,4 +80,11 @@ func (c *command) listing() *bytes.Buffer {
 	}
 	list := bytes.NewBuffer(out)
 	return list
+}
+
+func reverseArray(arr []string) []string {
+	for i, j := 0, len(arr)-1; i < j; i, j = i+1, j-1 {
+		arr[i], arr[j] = arr[j], arr[i]
+	}
+	return arr
 }

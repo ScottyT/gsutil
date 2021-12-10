@@ -11,6 +11,7 @@ type Config struct {
 	StorageBucket  string `mapstructure:"STORAGE_BUCKET"`
 	CredentialFile string `mapstructure:"CREDENTIAL_FILE"`
 	ProjectId      string `mapstructure:"PROJECT_ID"`
+	SaEmail        string `mapstructure:"SERVICE_ACCOUNT_EMAIL"`
 }
 
 // Usage for this is: viperEnvKey("KEY")

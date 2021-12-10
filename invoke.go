@@ -42,15 +42,19 @@ func main() {
 			return contains(allowedOrigins, origin)
 		},
 	}))
-	firebaseAuth := config.SetupFirebase()
+	firebaseAuth, firebaseStorage := config.SetupFirebase()
 	r.Use(func(c *gin.Context) {
 		// set firebase auth
 		c.Set("firebaseAuth", firebaseAuth)
+		c.Set("firebaseStorage", firebaseStorage)
 	})
 	r.Use(middleware.AuthMiddleware)
+	r.Use(middleware.GinBodyWriter)
 	r.POST("/zip", gin.WrapF(routes.DownloadHandler))
 	r.POST("/move", gin.WrapF(routes.MovingObjects))
-	r.GET("/list", gin.WrapF(routes.ListDir))
+	r.GET("/list/:path/:subfolder?", routes.ListObjects)
+	/* r.POST("/delete-files", gin.WrapF(routes.DeleteObjects)) */
+	r.POST("/delete-files", routes.DeleteObjects)
 	// Determine port for HTTP service.
 	port := os.Getenv("PORT")
 	if port == "" {
