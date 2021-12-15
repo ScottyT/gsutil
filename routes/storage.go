@@ -8,17 +8,11 @@ import (
 	"gsutil/config"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
-	credentials "cloud.google.com/go/iam/credentials/apiv1"
 	"cloud.google.com/go/storage"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
-	credentialspb "google.golang.org/genproto/googleapis/iam/credentials/v1"
 )
 
 var Bucket string
@@ -91,86 +85,40 @@ func DeleteObjects(c *gin.Context) {
 }
 
 func ListObjects(c *gin.Context) {
-	ctx := context.Background()
-	env, err := config.LoadConfig("./")
+	var prefix string
+	/* s := strings.Split(c.Param("path"), "__")
+	jobid, path := s[0], s[1] */
+	if c.Query("folder") == "" {
+		prefix = c.Param("path") + "/"
+	} else {
+		prefix = c.Param("path") + "/" + c.Query("subfolder")
+	}
+	e, err := uploader.List(prefix, c.Query("delimiter"))
 	if err != nil {
-		log.Fatal("cannot load config: ", err)
+		fmt.Fprintln(c.Writer, err)
 	}
 
-	dir, _ := os.Getwd()
-	serviceAccountKeyFilePath, err := filepath.Abs(dir + "/" + env.CredentialFile)
+	c.Data(http.StatusOK, gin.MIMEJSON, e)
+}
+
+func UploadFiles(c *gin.Context) {
+	form, err := c.MultipartForm()
 	if err != nil {
-		panic("Unable to load service account file")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
-	opt := option.WithCredentialsFile(serviceAccountKeyFilePath)
-
-	cred, err := credentials.NewIamCredentialsClient(ctx, opt)
+	files := form.File["multiFiles"]
+	f, err := uploader.Upload(files, c.PostForm("path"))
 	if err != nil {
-		panic(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
-
-	var resp FileResponse
-	if err := json.NewDecoder(c.Request.Body).Decode(&resp); err != nil {
-		fmt.Printf("Error: %v\n", err)
-	}
-
-	client, err := storage.NewClient(ctx, opt)
-	if err != nil {
-		fmt.Errorf("storage.NewClient: %v", err)
-	}
-	defer client.Close()
-	//firebaseStorage := c.MustGet("firebaseStorage").(*storage.Client)
-
-	//ctx, cancel := context.WithTimeout(ctx, time.Second*50)
-	//defer cancel()
-	it := client.Bucket(env.StorageBucket).Objects(ctx, &storage.Query{
-		Prefix:    resp.Prefix,
-		Delimiter: resp.Delim,
+	c.JSON(200, gin.H{
+		"message": "Upload was successful!",
+		"files":   f,
 	})
-	var folders []FolderObjectsInfo
-	var images []ImageObjectsInfo
-	var files *FileObjectsInfo
-	for {
-		attrs, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			fmt.Printf("Bucket(%q).Objects(): %v", env.StorageBucket, err)
-		}
-		opts := &storage.SignedURLOptions{
-			GoogleAccessID: env.SaEmail,
-			SignBytes: func(b []byte) ([]byte, error) {
-				req := &credentialspb.SignBlobRequest{
-					Payload: b,
-					Name:    env.SaEmail,
-				}
-				response, err := cred.SignBlob(ctx, req)
-				if err != nil {
-					fmt.Fprintf(c.Writer, "There was an error with creds: %v\n", err)
-				}
-				return response.SignedBlob, err
-			},
-			Scheme:  storage.SigningSchemeV4,
-			Method:  "GET",
-			Expires: time.Now().Add(15 * time.Minute),
-		}
-		url, err := storage.SignedURL(env.StorageBucket, attrs.Name, opts)
-		if err != nil {
-			fmt.Printf("Bucket(%q).SignedURL: %v", env.StorageBucket, err)
-		}
-		if strings.Contains(attrs.ContentType, "image") {
-			images = append(images, ImageObjectsInfo{
-				name:      attrs.Name,
-				imageUrl:  url,
-				subfolder: c.Param("subfolder"),
-			})
-		} else {
-			queryArray := reverseArray(strings.Split(c.Param("prefix"), "/"))
-			folders = append(folders, FolderObjectsInfo{name: queryArray[0], path: c.Param("prefix") + c.Param("delim")})
-		}
-
-		files = &FileObjectsInfo{folders: folders, images: images}
-	}
-	fmt.Fprintln(c.Writer, files)
 }
