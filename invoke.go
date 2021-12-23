@@ -6,7 +6,6 @@ import (
 	"gsutil/config"
 	"gsutil/middleware"
 	"gsutil/routes"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -30,12 +29,21 @@ func contains(s []string, str string) bool {
 	return false
 }
 func main() {
-	env, err := config.LoadConfig(".")
-	if err != nil {
-		log.Fatal("cannot load config: ", err)
-	}
+	appconfig := config.InitEnv()
+	firebaseAuth, firebaseStorage := config.SetupFirebase()
+	r := gin.Default()
+	r.Use(cors.New(cors.Config{
+		AllowMethods:     []string{"OPTIONS, GET, POST, PUT, DELETE"},
+		AllowHeaders:     []string{"Origin, X-Requested-With, Content-Type, Accept, Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		AllowOriginFunc: func(origin string) bool {
+			allowedOrigins := []string{"http://localhost:3000", appconfig.WebAppUrl}
+			return contains(allowedOrigins, origin)
+		},
+	}))
 	dir, _ := os.Getwd()
-	serviceAccountKeyFilePath, err := filepath.Abs(dir + "/" + env.CredentialFile)
+	serviceAccountKeyFilePath, err := filepath.Abs(dir + "/" + appconfig.CredentialFile)
 	if err != nil {
 		panic("Unable to load service account file")
 	}
@@ -46,33 +54,21 @@ func main() {
 		fmt.Errorf("storage.NewClient: %v", err)
 	}
 	defer client.Close()
-	routes.Init(env.StorageBucket, client)
-	r := gin.Default()
-	r.Use(cors.New(cors.Config{
-		AllowMethods:     []string{"OPTIONS, GET, POST, PUT, DELETE"},
-		AllowHeaders:     []string{"Origin, X-Requested-With, Content-Type, Accept, Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: false,
-		AllowAllOrigins:  true,
-		/* AllowOriginFunc: func(origin string) bool {
-			allowedOrigins := []string{"http://localhost:3000", env.WebAppUrl}
-			return contains(allowedOrigins, origin)
-		}, */
-	}))
-	firebaseAuth, firebaseStorage := config.SetupFirebase()
+
+	routes.InitStorageClient(appconfig.StorageBucket, firebaseStorage)
 	r.Use(func(c *gin.Context) {
 		// set firebase auth
 		c.Set("firebaseAuth", firebaseAuth)
 		c.Set("firebaseStorage", firebaseStorage)
 	})
 	r.Use(middleware.AuthMiddleware)
-	//r.Use(middleware.GinBodyWriter)
 	r.POST("/zip", gin.WrapF(routes.DownloadHandler))
-	r.POST("/move", gin.WrapF(routes.MovingObjects))
+	r.POST("/move", routes.MovingFiles)
 	r.GET("/list/:path", routes.ListObjects)
-	/* r.POST("/delete-files", gin.WrapF(routes.DeleteObjects)) */
 	r.POST("/delete-files", routes.DeleteObjects)
 	r.POST("/upload", routes.UploadFiles)
+	r.POST("/upload/avatar", routes.UploadAvatar)
+	r.POST("/upload/cert", routes.UploadCertBadge)
 	// Determine port for HTTP service.
 	port := os.Getenv("PORT")
 	if port == "" {

@@ -5,12 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gsutil/config"
 	"log"
 	"net/http"
 	"time"
 
-	"cloud.google.com/go/storage"
+	"firebase.google.com/go/v4/auth"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/api/iterator"
 )
@@ -25,8 +24,6 @@ type FilesIterator struct {
 
 func ExecCommand(com *command) (string, string, *bytes.Buffer) {
 	switch com.name {
-	case "listing":
-		return com.respMessage, "", com.listing()
 	case "moving":
 		return com.move(), com.respMessage, nil
 	case "download":
@@ -39,45 +36,34 @@ func Iterate(f func(n string), items []string) {
 		f(items[i])
 	}
 }
-
-func MovingObjects(w http.ResponseWriter, r *http.Request) {
-	env, err := config.LoadConfig("./")
-	if err != nil {
-		log.Fatal("cannot load config: ", err)
-	}
+func MovingFiles(c *gin.Context) {
 	var output FolderInfo
-	if err := json.NewDecoder(r.Body).Decode(&output); err != nil {
-		log.Fatal(err)
+	if err := json.NewDecoder(c.Request.Body).Decode(&output); err != nil {
+		fmt.Print(err)
 	}
-	c := &command{}
-	var message string
-	for _, item := range output.SourceFiles {
-		//item is the prefix from client-side
-		c = &command{
-			name:        "moving",
-			args:        []string{"mv", "gs://" + env.StorageBucket + "/" + item + "*", "gs://" + env.StorageBucket + "/" + output.DestFolder},
-			respMessage: "Files successfully moved!",
+	su = StorageUploader{
+		bucketName: appconfig.StorageBucket,
+	}
+	Iterate(func(n string) {
+		err := uploader.Moving(n, output.DestFolder)
+		if err != nil {
+			fmt.Fprintln(c.Writer, err)
 		}
-		_, message, _ = ExecCommand(c)
-	}
-	fmt.Fprint(w, message)
+	}, output.SourceFiles)
+	fmt.Fprintln(c.Writer, "Images uploaded successfully!")
 }
 func DeleteObjects(c *gin.Context) {
 	ctx := context.Background()
-	env, err := config.LoadConfig("./")
-	if err != nil {
-		log.Fatal("cannot load config: ", err)
-	}
-
-	firebaseStorage := c.MustGet("firebaseStorage").(*storage.Client)
-
 	var output FolderInfo
 	if err := json.NewDecoder(c.Request.Body).Decode(&output); err != nil {
 		fmt.Print(err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
 	defer cancel()
-	bucket := firebaseStorage.Bucket(env.StorageBucket)
+	su = StorageUploader{
+		bucketName: appconfig.StorageBucket,
+	}
+	bucket := uploader.cl.Bucket(su.bucketName)
 	Iterate(func(n string) {
 		bucket.Object(n).Delete(ctx)
 		fmt.Fprintln(c.Writer, n+" was deleted!")
@@ -86,8 +72,9 @@ func DeleteObjects(c *gin.Context) {
 
 func ListObjects(c *gin.Context) {
 	var prefix string
-	/* s := strings.Split(c.Param("path"), "__")
-	jobid, path := s[0], s[1] */
+	su = StorageUploader{
+		bucketName: appconfig.StorageBucket,
+	}
 	if c.Query("folder") == "" {
 		prefix = c.Param("path") + "/"
 	} else {
@@ -109,6 +96,9 @@ func UploadFiles(c *gin.Context) {
 		})
 		return
 	}
+	su = StorageUploader{
+		bucketName: appconfig.StorageBucket,
+	}
 	files := form.File["multiFiles"]
 	f, err := uploader.Upload(files, c.PostForm("path"))
 	if err != nil {
@@ -120,5 +110,83 @@ func UploadFiles(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"message": "Upload was successful!",
 		"files":   f,
+	})
+}
+
+func UploadAvatar(c *gin.Context) {
+	firebaseAuth := c.MustGet("firebaseAuth").(*auth.Client)
+	f, err := c.FormFile("single")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	su = StorageUploader{
+		bucketName: appconfig.EmployeeBucket,
+		uploadPath: c.PostForm("user") + "/",
+	}
+
+	blobFile, err := f.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	image, err := uploader.UploadImageInUser(blobFile, f.Filename)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	user, err := firebaseAuth.GetUserByEmail(context.Background(), c.PostForm("user"))
+	if err != nil {
+		log.Fatalf("error getting user: %v\n", err)
+	}
+	params := (&auth.UserToUpdate{}).
+		PhotoURL(image)
+	_, err = firebaseAuth.UpdateUser(context.Background(), user.UID, params)
+	if err != nil {
+		log.Fatalf("error updating user: %v\n", err)
+	}
+	fmt.Printf("Successfully updated user: %v\n", user)
+	c.JSON(200, gin.H{
+		"message":  "success",
+		"imageUrl": image,
+	})
+}
+func UploadCertBadge(c *gin.Context) {
+	f, err := c.FormFile("single")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	su = StorageUploader{
+		bucketName: appconfig.EmployeeBucket,
+		uploadPath: c.PostForm("user") + "/cert-images/",
+	}
+	blobFile, err := f.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	image, err := uploader.UploadImageInUser(blobFile, f.Filename)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	c.JSON(200, gin.H{
+		"message":   "Certification badge uploaded!",
+		"imageUrl":  image,
+		"imageName": f.Filename,
 	})
 }

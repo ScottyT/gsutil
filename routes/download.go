@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"encoding/json"
 	"fmt"
-	"gsutil/config"
 	"io"
 	"io/fs"
 	"io/ioutil"
@@ -24,10 +23,6 @@ type FileInfo struct {
 }
 
 func DownloadHandler(w http.ResponseWriter, r *http.Request) {
-	env, err := config.LoadConfig("./")
-	if err != nil {
-		log.Fatal("cannot load config: ", err)
-	}
 	var output FolderInfo
 	if err := json.NewDecoder(r.Body).Decode(&output); err != nil {
 		log.Fatal(err)
@@ -58,7 +53,7 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	} */
 	c := &command{
 		name:        "download",
-		args:        []string{"-m", "cp", "-r", "gs://" + env.StorageBucket + "/" + folder, dir},
+		args:        []string{"-m", "cp", "-r", "gs://" + su.bucketName + "/" + folder, dir},
 		respMessage: "Files downloaded!",
 	}
 	val, message, _ := ExecCommand(c)
