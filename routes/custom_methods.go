@@ -69,13 +69,6 @@ var cmd *exec.Cmd
 
 func InitStorageClient(bucket string, client *storage.Client) {
 	appconfig = config.InitEnv()
-
-	/* var bucket string
-	if emp {
-		bucket = appconfig.EmployeeBucket
-	} else {
-		bucket = appconfig.StorageBucket
-	} */
 	su = StorageUploader{
 		bucketName: bucket,
 	}
@@ -150,7 +143,6 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, error) {
 	}
 	e, err := json.Marshal(files)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 	return e, nil

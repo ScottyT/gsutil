@@ -36,6 +36,14 @@ func Iterate(f func(n string), items []string) {
 		f(items[i])
 	}
 }
+
+// For goroutine use only
+func IterateRoutine(f func(n string), items []string, done chan bool) {
+	for i := 0; i < len(items); i++ {
+		f(items[i])
+	}
+	done <- true
+}
 func MovingFiles(c *gin.Context) {
 	var output FolderInfo
 	if err := json.NewDecoder(c.Request.Body).Decode(&output); err != nil {
@@ -44,13 +52,16 @@ func MovingFiles(c *gin.Context) {
 	su = StorageUploader{
 		bucketName: appconfig.StorageBucket,
 	}
-	Iterate(func(n string) {
+	done := make(chan bool, 1)
+	go IterateRoutine(func(n string) {
 		err := uploader.Moving(n, output.DestFolder)
 		if err != nil {
 			fmt.Fprintln(c.Writer, err)
+			return
 		}
-	}, output.SourceFiles)
-	fmt.Fprintln(c.Writer, "Images uploaded successfully!")
+	}, output.SourceFiles, done)
+	<-done
+	fmt.Fprintln(c.Writer, "Files move operation done!")
 }
 func DeleteObjects(c *gin.Context) {
 	ctx := context.Background()
@@ -64,16 +75,26 @@ func DeleteObjects(c *gin.Context) {
 		bucketName: appconfig.StorageBucket,
 	}
 	bucket := uploader.cl.Bucket(su.bucketName)
-	Iterate(func(n string) {
+	done := make(chan bool, 1)
+	go IterateRoutine(func(n string) {
 		bucket.Object(n).Delete(ctx)
 		fmt.Fprintln(c.Writer, n+" was deleted!")
-	}, output.SourceFiles)
+	}, output.SourceFiles, done)
+	<-done
+	fmt.Fprintln(c.Writer, "Files were deleted")
 }
 
 func ListObjects(c *gin.Context) {
 	var prefix string
-	su = StorageUploader{
-		bucketName: appconfig.StorageBucket,
+	var files FileObjectsInfo
+	if c.Query("bucket") == "employee" {
+		su = StorageUploader{
+			bucketName: appconfig.EmployeeBucket,
+		}
+	} else {
+		su = StorageUploader{
+			bucketName: appconfig.StorageBucket,
+		}
 	}
 	if c.Query("folder") == "" {
 		prefix = c.Param("path") + "/"
@@ -82,10 +103,17 @@ func ListObjects(c *gin.Context) {
 	}
 	e, err := uploader.List(prefix, c.Query("delimiter"))
 	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err,
+		})
+	}
+	if err := json.Unmarshal(e, &files); err != nil {
 		fmt.Fprintln(c.Writer, err)
 	}
-
-	c.Data(http.StatusOK, gin.MIMEJSON, e)
+	c.JSON(200, gin.H{
+		"folders": files.Folders,
+		"images":  files.Images,
+	})
 }
 
 func UploadFiles(c *gin.Context) {
