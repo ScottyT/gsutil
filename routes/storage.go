@@ -85,6 +85,25 @@ func DeleteObjects(c *gin.Context) {
 }
 
 func ListObjects(c *gin.Context) {
+	var files FileObjectsInfo
+	su = StorageUploader{
+		bucketName: appconfig.StorageBucket,
+	}
+	items, err := uploader.List("", c.Query("delimiter"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err,
+		})
+	}
+	if err := json.Unmarshal(items, &files); err != nil {
+		fmt.Fprintln(c.Writer, err)
+	}
+	c.JSON(200, gin.H{
+		"folders": files.Folders,
+	})
+}
+
+func ListObjectsInFolder(c *gin.Context) {
 	var prefix string
 	var files FileObjectsInfo
 	if c.Query("bucket") == "employee" {

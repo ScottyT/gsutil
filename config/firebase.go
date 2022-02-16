@@ -40,10 +40,6 @@ func SetupFirebase() (*auth.Client, *storage.Client) {
 	if err != nil {
 		log.Fatalf("error getting Storage client: %v\n", err)
 	}
-	/* storage, err := app.Storage(context.Background())
-	if err != nil {
-		log.Fatalf("error getting Storage client: %v\n", err)
-	} */
 
 	return auth, clientStorage
 }

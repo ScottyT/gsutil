@@ -33,24 +33,7 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	folder := output.FolderPath
 	dir, _ := os.Getwd()
-	// Might use this code if I make a signed url for objects being downloaded
-	/* opts := &storage.SignedURLOptions{
-		GoogleAccessID: env.SaEmail,
-		SignBytes: func(b []byte) ([]byte, error) {
-			req := &credentialspb.SignBlobRequest{
-				Payload: b,
-				Name:    env.SaEmail,
-			}
-			response, err := cred.SignBlob(ctx, req)
-			if err != nil {
-				fmt.Fprintf(c.Writer, "There was an error with creds: %v\n", err)
-			}
-			return response.SignedBlob, err
-		},
-		Scheme:  storage.SigningSchemeV4,
-		Method:  "GET",
-		Expires: time.Now().Add(15 * time.Minute),
-	} */
+
 	c := &command{
 		name:        "download",
 		args:        []string{"-m", "cp", "-r", "gs://" + su.bucketName + "/" + folder, dir},

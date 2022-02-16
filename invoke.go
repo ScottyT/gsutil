@@ -28,9 +28,10 @@ func contains(s []string, str string) bool {
 
 	return false
 }
+
 func main() {
 	appconfig := config.InitEnv()
-	firebaseAuth, firebaseStorage := config.SetupFirebase()
+	_, firebaseStorage := config.SetupFirebase()
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
 		AllowMethods:     []string{"OPTIONS, GET, POST, PUT, DELETE"},
@@ -57,14 +58,13 @@ func main() {
 
 	routes.InitStorageClient(appconfig.StorageBucket, firebaseStorage)
 	r.Use(func(c *gin.Context) {
-		// set firebase auth
-		c.Set("firebaseAuth", firebaseAuth)
 		c.Set("firebaseStorage", firebaseStorage)
 	})
 	r.Use(middleware.AuthMiddleware)
 	r.POST("/zip", gin.WrapF(routes.DownloadHandler))
 	r.POST("/move", routes.MovingFiles)
-	r.GET("/list/:path", routes.ListObjects)
+	r.GET("/list/:path", routes.ListObjectsInFolder)
+	r.GET("/list", routes.ListObjects)
 	r.POST("/delete-files", routes.DeleteObjects)
 	r.POST("/upload", routes.UploadFiles)
 	r.POST("/upload/avatar", routes.UploadAvatar)
