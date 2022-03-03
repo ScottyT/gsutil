@@ -65,6 +65,7 @@ func main() {
 	r.POST("/move", routes.MovingFiles)
 	r.GET("/list/:path", routes.ListObjectsInFolder)
 	r.GET("/list", routes.ListObjects)
+	r.GET("/list/file/:path", routes.GetObject)
 	r.POST("/delete-files", routes.DeleteObjects)
 	r.POST("/upload", routes.UploadFiles)
 	r.POST("/upload/avatar", routes.UploadAvatar)

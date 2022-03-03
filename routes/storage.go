@@ -103,6 +103,33 @@ func ListObjects(c *gin.Context) {
 	})
 }
 
+func GetObject(c *gin.Context) {
+	var filename string
+
+	if c.Query("bucket") == "employee" {
+		su = StorageUploader{
+			bucketName: appconfig.EmployeeBucket,
+		}
+	} else {
+		su = StorageUploader{
+			bucketName: appconfig.StorageBucket,
+		}
+	}
+	if c.Query("folder") == "" {
+		filename = c.Param("path") + "/"
+	} else {
+		filename = c.Query("folder") + "/" + c.Param("path")
+	}
+
+	file, err := uploader.ReadImage(filename)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err,
+		})
+	}
+
+	c.JSON(200, file)
+}
 func ListObjectsInFolder(c *gin.Context) {
 	var prefix string
 	var files FileObjectsInfo

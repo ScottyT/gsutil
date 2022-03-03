@@ -31,10 +31,14 @@ func AuthMiddleware(c *gin.Context) {
 	block, _ := pem.Decode(rsaPublicKey)
 	cert, _ = x509.ParseCertificate(block.Bytes)
 	pub := cert.PublicKey.(*rsa.PublicKey)
-
+	claims := jwt.MapClaims{}
+	for key, val := range claims {
+		fmt.Println(key, val)
+	}
 	token, err := jwt.ParseWithClaims(idToken, jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return pub, nil
 	})
+
 	if token.Valid {
 		c.Next()
 	} else if errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet) {

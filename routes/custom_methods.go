@@ -148,6 +148,26 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, error) {
 	return e, nil
 }
 
+func (clu *ClientUploader) ReadImage(fileName string) (*ImageObjectsInfo, error) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
+	defer cancel()
+	var image *ImageObjectsInfo
+	rc, err := clu.cl.Bucket(clu.directory.bucketName).Object(fileName).Attrs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	token := rc.Metadata["firebaseStorageDownloadTokens"]
+	image = &ImageObjectsInfo{
+		Name:      rc.Name,
+		ImageUrl:  "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(rc.Name) + "?alt=media&token=" + token,
+		Subfolder: "",
+	}
+
+	return image, nil
+}
+
 func (clu *ClientUploader) Upload(files []*multipart.FileHeader, path string) ([]ImageObjectsInfo, error) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
