@@ -31,7 +31,7 @@ func contains(s []string, str string) bool {
 
 func main() {
 	appconfig := config.InitEnv()
-	_, firebaseStorage := config.SetupFirebase()
+	firebaseStorage := config.SetupFirebase()
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
 		AllowMethods:     []string{"OPTIONS, GET, POST, PUT, DELETE"},
@@ -70,6 +70,7 @@ func main() {
 	r.POST("/upload", routes.UploadFiles)
 	r.POST("/upload/avatar", routes.UploadAvatar)
 	r.POST("/upload/cert", routes.UploadCertBadge)
+	r.POST("/folder/:jobid/create", routes.FolderCreation)
 	// Determine port for HTTP service.
 	port := os.Getenv("PORT")
 	if port == "" {

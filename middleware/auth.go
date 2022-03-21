@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -24,7 +26,12 @@ func AuthMiddleware(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	rsaPublicKey, err := ioutil.ReadFile("code-red-app.pem")
+	dir, _ := os.Getwd()
+	pemfile, err := filepath.Abs(dir + "/code-red-app.pem")
+	if err != nil {
+		panic("Unable to load pem file")
+	}
+	rsaPublicKey, err := ioutil.ReadFile(pemfile)
 	if err != nil {
 		fmt.Println("error reading file: ", err)
 	}
