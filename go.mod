@@ -8,6 +8,8 @@ require (
 	cloud.google.com/go/storage v1.10.0 // indirect
 	firebase.google.com/go v3.13.0+incompatible // indirect
 	firebase.google.com/go/v4 v4.6.0 // indirect
+	github.com/auth0/go-jwt-middleware v1.0.1 // indirect
+	github.com/form3tech-oss/jwt-go v3.2.2+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/gin-contrib/cors v1.3.1 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
@@ -15,6 +17,7 @@ require (
 	github.com/go-playground/locales v0.13.0 // indirect
 	github.com/go-playground/universal-translator v0.17.0 // indirect
 	github.com/go-playground/validator/v10 v10.4.1 // indirect
+	github.com/golang-jwt/jwt/v4 v4.3.0 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.6 // indirect

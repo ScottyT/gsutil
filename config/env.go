@@ -14,6 +14,9 @@ type Config struct {
 	ProjectId      string `mapstructure:"PROJECT_ID"`
 	SaEmail        string `mapstructure:"SERVICE_ACCOUNT_EMAIL"`
 	EmployeeBucket string `mapstructure:"EMPLOYEE_BUCKET"`
+	AuthDomain     string `mapstructure:"AUTH0_DOMAIN"`
+	AuthClientId   string `mapstructure:"AUTH0_CLIENT_ID"`
+	AuthSecret     string `mapstructure:"AUTH0_SECRET"`
 }
 type EnvConfig struct {
 	WebAppUrl      string
@@ -22,6 +25,9 @@ type EnvConfig struct {
 	ProjectId      string
 	SaEmail        string
 	EmployeeBucket string
+	AuthDomain     string
+	AuthClientId   string
+	AuthSecret     string
 }
 
 var appConfig *EnvConfig
@@ -54,6 +60,9 @@ func InitEnv() *EnvConfig {
 		CredentialFile: env.CredentialFile,
 		ProjectId:      env.ProjectId,
 		SaEmail:        env.SaEmail,
+		AuthDomain:     env.AuthDomain,
+		AuthClientId:   env.AuthClientId,
+		AuthSecret:     env.AuthSecret,
 	}
 	return appConfig
 }

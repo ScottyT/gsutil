@@ -5,11 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
+	"strings"
 	"time"
 
-	"firebase.google.com/go/v4/auth"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/api/iterator"
 )
@@ -20,6 +19,20 @@ type FilesIterator struct {
 	pageInfo *iterator.PageInfo
 	nextFunc func() error
 	items    []string
+}
+
+type Response struct {
+	Status int
+	Error  string
+}
+
+var resp Response
+
+func SendResponseError(c *gin.Context, response Response) {
+	if len(response.Error) > 0 {
+		c.JSON(response.Status, response.Error)
+		return
+	}
 }
 
 func ExecCommand(com *command) (string, string, *bytes.Buffer) {
@@ -83,8 +96,44 @@ func DeleteObjects(c *gin.Context) {
 	<-done
 	fmt.Fprintln(c.Writer, "Files were deleted")
 }
+func GetObject(c *gin.Context) {
+	var filename string
 
+	if c.Query("bucket") == "employee" {
+		su = StorageUploader{
+			bucketName: appconfig.EmployeeBucket,
+		}
+	} else {
+		su = StorageUploader{
+			bucketName: appconfig.StorageBucket,
+		}
+	}
+	if c.Query("folder") == "" {
+		filename = c.Param("path") + "/"
+	} else {
+		filename = c.Query("folder") + "/" + c.Param("path")
+	}
+
+	file, resp := uploader.ReadImage(filename)
+	SendResponseError(c, resp)
+
+	c.JSON(200, file)
+}
 func ListObjects(c *gin.Context) {
+	var files FileObjectsInfo
+	su = StorageUploader{
+		bucketName: appconfig.StorageBucket,
+	}
+	items, resp := uploader.List("", c.Query("delimiter"))
+	SendResponseError(c, resp)
+	if err := json.Unmarshal(items, &files); err != nil {
+		fmt.Fprintln(c.Writer, err)
+	}
+	c.JSON(200, gin.H{
+		"folders": files.Folders,
+	})
+}
+func ListObjectsInFolder(c *gin.Context) {
 	var prefix string
 	var files FileObjectsInfo
 	if c.Query("bucket") == "employee" {
@@ -101,14 +150,10 @@ func ListObjects(c *gin.Context) {
 	} else {
 		prefix = c.Param("path") + "/" + c.Query("subfolder")
 	}
-	e, err := uploader.List(prefix, c.Query("delimiter"))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err,
-		})
-	}
+	e, resp := uploader.List(prefix, c.Query("delimiter"))
+	SendResponseError(c, resp)
 	if err := json.Unmarshal(e, &files); err != nil {
-		fmt.Fprintln(c.Writer, err)
+		SendResponseError(c, Response{Status: http.StatusBadRequest, Error: "There was an error unmarshaling the files."})
 	}
 	c.JSON(200, gin.H{
 		"folders": files.Folders,
@@ -119,36 +164,25 @@ func ListObjects(c *gin.Context) {
 func UploadFiles(c *gin.Context) {
 	form, err := c.MultipartForm()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
+		SendResponseError(c, Response{Status: http.StatusBadRequest, Error: err.Error()})
 	}
 	su = StorageUploader{
 		bucketName: appconfig.StorageBucket,
 	}
+	var res Response
 	files := form.File["multiFiles"]
-	f, err := uploader.Upload(files, c.PostForm("path"))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-	c.JSON(200, gin.H{
+	f, res := uploader.Upload(files, c.PostForm("path"))
+	SendResponseError(c, res)
+	c.JSON(http.StatusCreated, gin.H{
 		"message": "Upload was successful!",
 		"files":   f,
 	})
 }
 
 func UploadAvatar(c *gin.Context) {
-	firebaseAuth := c.MustGet("firebaseAuth").(*auth.Client)
 	f, err := c.FormFile("single")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
+		SendResponseError(c, Response{Status: http.StatusBadRequest, Error: err.Error()})
 	}
 
 	su = StorageUploader{
@@ -163,25 +197,10 @@ func UploadAvatar(c *gin.Context) {
 		})
 		return
 	}
-	image, err := uploader.UploadImageInUser(blobFile, f.Filename)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-	user, err := firebaseAuth.GetUserByEmail(context.Background(), c.PostForm("user"))
-	if err != nil {
-		log.Fatalf("error getting user: %v\n", err)
-	}
-	params := (&auth.UserToUpdate{}).
-		PhotoURL(image)
-	_, err = firebaseAuth.UpdateUser(context.Background(), user.UID, params)
-	if err != nil {
-		log.Fatalf("error updating user: %v\n", err)
-	}
-	fmt.Printf("Successfully updated user: %v\n", user)
-	c.JSON(200, gin.H{
+	image, resp := uploader.UploadImageInUser(blobFile, f.Filename)
+	SendResponseError(c, resp)
+
+	c.JSON(http.StatusCreated, gin.H{
 		"message":  "success",
 		"imageUrl": image,
 	})
@@ -205,16 +224,27 @@ func UploadCertBadge(c *gin.Context) {
 		})
 		return
 	}
-	image, err := uploader.UploadImageInUser(blobFile, f.Filename)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-	c.JSON(200, gin.H{
+	image, resp := uploader.UploadImageInUser(blobFile, f.Filename)
+	SendResponseError(c, resp)
+	c.JSON(http.StatusCreated, gin.H{
 		"message":   "Certification badge uploaded!",
 		"imageUrl":  image,
 		"imageName": f.Filename,
 	})
+}
+
+func FolderCreation(c *gin.Context) {
+	su = StorageUploader{
+		bucketName: appconfig.StorageBucket,
+	}
+	jobid := c.Query("jobid")
+	folderPath := c.Param("folderPath")
+	folderPathArr := strings.Split(folderPath, "/")
+	var folderName string
+	if folderName = jobid + "/" + strings.Split(folderPath, "/")[len(folderPathArr)-1]; folderPath != "" {
+		folderName = jobid
+	}
+	f, resp := uploader.CreateFolder(folderName)
+	SendResponseError(c, resp)
+	c.JSON(200, f)
 }
