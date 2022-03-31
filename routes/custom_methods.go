@@ -30,9 +30,8 @@ type FilesList struct {
 	Files []FilesList `json:"files"`
 }
 type ImageObjectsInfo struct {
-	Name      string `json:"name"`
-	ImageUrl  string `json:"imageUrl"`
-	Subfolder string `json:"subFolder"`
+	Name     string `json:"name"`
+	ImageUrl string `json:"imageUrl"`
 }
 type FolderObjectsInfo struct {
 	Name string `json:"name"`
@@ -130,9 +129,8 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, Response) {
 		if strings.Contains(attrs.ContentType, "image") {
 			token := attrs.Metadata["firebaseStorageDownloadTokens"]
 			images = append(images, ImageObjectsInfo{
-				Name:      attrs.Name,
-				ImageUrl:  "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(attrs.Name) + "?alt=media&token=" + token,
-				Subfolder: "",
+				Name:     attrs.Name,
+				ImageUrl: "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(attrs.Name) + "?alt=media&token=" + token,
 			})
 		}
 		if attrs.Prefix != "" {
@@ -161,9 +159,8 @@ func (clu *ClientUploader) ReadImage(fileName string) (*ImageObjectsInfo, Respon
 
 	token := rc.Metadata["firebaseStorageDownloadTokens"]
 	image = &ImageObjectsInfo{
-		Name:      rc.Name,
-		ImageUrl:  "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(rc.Name) + "?alt=media&token=" + token,
-		Subfolder: "",
+		Name:     rc.Name,
+		ImageUrl: "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(rc.Name) + "?alt=media&token=" + token,
 	}
 
 	return image, Response{}

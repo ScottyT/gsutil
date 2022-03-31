@@ -5,12 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
-	"firebase.google.com/go/v4/auth"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/api/iterator"
 )
@@ -98,22 +96,6 @@ func DeleteObjects(c *gin.Context) {
 	<-done
 	fmt.Fprintln(c.Writer, "Files were deleted")
 }
-
-func ListObjects(c *gin.Context) {
-	var files FileObjectsInfo
-	su = StorageUploader{
-		bucketName: appconfig.StorageBucket,
-	}
-	items, resp := uploader.List("", c.Query("delimiter"))
-	SendResponseError(c, resp)
-	if err := json.Unmarshal(items, &files); err != nil {
-		fmt.Fprintln(c.Writer, err)
-	}
-	c.JSON(200, gin.H{
-		"folders": files.Folders,
-	})
-}
-
 func GetObject(c *gin.Context) {
 	var filename string
 
@@ -136,6 +118,20 @@ func GetObject(c *gin.Context) {
 	SendResponseError(c, resp)
 
 	c.JSON(200, file)
+}
+func ListObjects(c *gin.Context) {
+	var files FileObjectsInfo
+	su = StorageUploader{
+		bucketName: appconfig.StorageBucket,
+	}
+	items, resp := uploader.List("", c.Query("delimiter"))
+	SendResponseError(c, resp)
+	if err := json.Unmarshal(items, &files); err != nil {
+		fmt.Fprintln(c.Writer, err)
+	}
+	c.JSON(200, gin.H{
+		"folders": files.Folders,
+	})
 }
 func ListObjectsInFolder(c *gin.Context) {
 	var prefix string
@@ -184,7 +180,6 @@ func UploadFiles(c *gin.Context) {
 }
 
 func UploadAvatar(c *gin.Context) {
-	firebaseAuth := c.MustGet("firebaseAuth").(*auth.Client)
 	f, err := c.FormFile("single")
 	if err != nil {
 		SendResponseError(c, Response{Status: http.StatusBadRequest, Error: err.Error()})
@@ -204,16 +199,7 @@ func UploadAvatar(c *gin.Context) {
 	}
 	image, resp := uploader.UploadImageInUser(blobFile, f.Filename)
 	SendResponseError(c, resp)
-	user, err := firebaseAuth.GetUserByEmail(context.Background(), c.PostForm("user"))
-	if err != nil {
-		log.Fatalf("error getting user: %v\n", err)
-	}
-	params := (&auth.UserToUpdate{}).
-		PhotoURL(image)
-	_, err = firebaseAuth.UpdateUser(context.Background(), user.UID, params)
-	if err != nil {
-		log.Fatalf("error updating user: %v\n", err)
-	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message":  "success",
 		"imageUrl": image,

@@ -23,11 +23,6 @@ func SetupFirebase() *storage.Client {
 	}
 	opt = option.WithCredentialsFile(serviceAccountKeyFilePath)
 
-	//Firebase Auth
-	/* auth, err := app.Auth(context.Background())
-	if err != nil {
-		log.Fatalf("error getting Auth client: %v\n", err)
-	} */
 	clientStorage, err := storage.NewClient(context.Background(), opt)
 	if err != nil {
 		log.Fatalf("error getting Storage client: %v\n", err)
