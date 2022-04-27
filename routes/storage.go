@@ -158,6 +158,7 @@ func ListObjectsInFolder(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"folders": files.Folders,
 		"images":  files.Images,
+		"pdfs":    files.Pdfs,
 	})
 }
 

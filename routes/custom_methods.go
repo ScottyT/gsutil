@@ -40,6 +40,7 @@ type FolderObjectsInfo struct {
 type FileObjectsInfo struct {
 	Folders []FolderObjectsInfo `json:"folders"`
 	Images  []ImageObjectsInfo  `json:"images"`
+	Pdfs    []ImageObjectsInfo  `json:"pdfs"`
 }
 type ResponseImgArr struct {
 	downloadUrl string
@@ -113,6 +114,7 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, Response) {
 	var folders []FolderObjectsInfo
 	var images []ImageObjectsInfo
 	var files *FileObjectsInfo
+	var pdfs []ImageObjectsInfo
 
 	it := clu.cl.Bucket(clu.directory.bucketName).Objects(ctx, &storage.Query{
 		Prefix:    prefix,
@@ -133,12 +135,19 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, Response) {
 				ImageUrl: "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(attrs.Name) + "?alt=media&token=" + token,
 			})
 		}
+		if strings.Contains(attrs.ContentType, "pdf") {
+			token := attrs.Metadata["firebaseStorageDownloadTokens"]
+			pdfs = append(pdfs, ImageObjectsInfo{
+				Name:     attrs.Name,
+				ImageUrl: "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(attrs.Name) + "?alt=media&token=" + token,
+			})
+		}
 		if attrs.Prefix != "" {
 			sarr := reverseArray(strings.Split(attrs.Prefix, "/"))
 			folders = append(folders, FolderObjectsInfo{Name: sarr[1], Path: attrs.Prefix})
 		}
 
-		files = &FileObjectsInfo{Folders: folders, Images: images}
+		files = &FileObjectsInfo{Folders: folders, Images: images, Pdfs: pdfs}
 	}
 	e, err := json.Marshal(files)
 	if err != nil {
