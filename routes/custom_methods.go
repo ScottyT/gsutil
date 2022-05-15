@@ -209,7 +209,7 @@ func (clu *ClientUploader) Upload(files []*multipart.FileHeader, path string) ([
 		if token, ok = objUpdate.Metadata["firebaseStorageDownloadTokens"]; ok {
 			imageUrl = "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(wc.Attrs().Name) + "?alt=media&token=" + token
 		}
-		if strings.Contains(wc.Attrs().ContentType, "image") {
+		if strings.Contains(wc.Attrs().ContentType, "image") || strings.Contains(wc.Attrs().ContentType, "pdf") {
 			imageArr = append(imageArr, ImageObjectsInfo{Name: wc.Attrs().Name, ImageUrl: imageUrl})
 		}
 	}
