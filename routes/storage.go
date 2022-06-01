@@ -31,7 +31,6 @@ var resp Response
 func SendResponseError(c *gin.Context, response Response) {
 	if len(response.Error) > 0 {
 		c.JSON(response.Status, response.Error)
-		return
 	}
 }
 
@@ -146,14 +145,19 @@ func ListObjectsInFolder(c *gin.Context) {
 		}
 	}
 	if c.Query("folder") == "" {
-		prefix = c.Param("path") + "/"
+		prefix = c.Param("jobid") + "/"
 	} else {
-		prefix = c.Param("path") + "/" + c.Query("subfolder")
+		prefix = c.Query("subfolder")
 	}
 	e, resp := uploader.List(prefix, c.Query("delimiter"))
 	SendResponseError(c, resp)
 	if err := json.Unmarshal(e, &files); err != nil {
 		SendResponseError(c, Response{Status: http.StatusBadRequest, Error: "There was an error unmarshaling the files."})
+		return
+	}
+	if string(e) == "null" {
+		SendResponseError(c, Response{Status: http.StatusNotFound, Error: "No files found."})
+		return
 	}
 	c.JSON(200, gin.H{
 		"folders": files.Folders,

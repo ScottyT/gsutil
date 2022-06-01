@@ -146,7 +146,6 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, Response) {
 			sarr := reverseArray(strings.Split(attrs.Prefix, "/"))
 			folders = append(folders, FolderObjectsInfo{Name: sarr[1], Path: attrs.Prefix})
 		}
-
 		files = &FileObjectsInfo{Folders: folders, Images: images, Pdfs: pdfs}
 	}
 	e, err := json.Marshal(files)
