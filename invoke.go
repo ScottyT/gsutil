@@ -64,7 +64,7 @@ func main() {
 	r.POST("/zip", gin.WrapF(routes.DownloadHandler))
 	r.POST("/move", routes.MovingFiles)
 	r.GET("/list", routes.ListObjects)
-	r.GET("/list/:path", routes.ListObjectsInFolder)
+	r.GET("/list/:jobid", routes.ListObjectsInFolder)
 	r.GET("/list/file/:path", routes.GetObject)
 	r.POST("/delete-files", routes.DeleteObjects)
 	r.POST("/upload", routes.UploadFiles)

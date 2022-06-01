@@ -146,7 +146,6 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, Response) {
 			sarr := reverseArray(strings.Split(attrs.Prefix, "/"))
 			folders = append(folders, FolderObjectsInfo{Name: sarr[1], Path: attrs.Prefix})
 		}
-
 		files = &FileObjectsInfo{Folders: folders, Images: images, Pdfs: pdfs}
 	}
 	e, err := json.Marshal(files)
@@ -209,7 +208,7 @@ func (clu *ClientUploader) Upload(files []*multipart.FileHeader, path string) ([
 		if token, ok = objUpdate.Metadata["firebaseStorageDownloadTokens"]; ok {
 			imageUrl = "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(wc.Attrs().Name) + "?alt=media&token=" + token
 		}
-		if strings.Contains(wc.Attrs().ContentType, "image") {
+		if strings.Contains(wc.Attrs().ContentType, "image") || strings.Contains(wc.Attrs().ContentType, "pdf") {
 			imageArr = append(imageArr, ImageObjectsInfo{Name: wc.Attrs().Name, ImageUrl: imageUrl})
 		}
 	}
