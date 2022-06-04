@@ -102,7 +102,8 @@ func GetObject(c *gin.Context) {
 		su = StorageUploader{
 			bucketName: appconfig.EmployeeBucket,
 		}
-	} else {
+	}
+	if c.Query("bucket") == "default" {
 		su = StorageUploader{
 			bucketName: appconfig.StorageBucket,
 		}

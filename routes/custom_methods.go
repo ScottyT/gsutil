@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"gsutil/config"
 	"io"
+	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -30,8 +32,9 @@ type FilesList struct {
 	Files []FilesList `json:"files"`
 }
 type ImageObjectsInfo struct {
-	Name     string `json:"name"`
-	ImageUrl string `json:"imageUrl"`
+	Name       string `json:"name"`
+	ImageUrl   string `json:"imageUrl"`
+	FolderName string `json:"folderName"`
 }
 type FolderObjectsInfo struct {
 	Name string `json:"name"`
@@ -129,10 +132,12 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, Response) {
 			return nil, Response{Status: http.StatusBadRequest, Error: err.Error()}
 		}
 		if strings.Contains(attrs.ContentType, "image") {
+			sarr := reverseArray(strings.Split(attrs.Name, "/"))
 			token := attrs.Metadata["firebaseStorageDownloadTokens"]
 			images = append(images, ImageObjectsInfo{
-				Name:     attrs.Name,
-				ImageUrl: "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(attrs.Name) + "?alt=media&token=" + token,
+				Name:       attrs.Name,
+				ImageUrl:   "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(attrs.Name) + "?alt=media&token=" + token,
+				FolderName: sarr[1],
 			})
 		}
 		if strings.Contains(attrs.ContentType, "pdf") {
@@ -156,19 +161,33 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, Response) {
 }
 
 func (clu *ClientUploader) ReadImage(fileName string) (*ImageObjectsInfo, Response) {
+	dir, _ := os.Getwd()
+	storageKeyPath, err := filepath.Abs(dir + "/cr-storage-key.pem")
+	if err != nil {
+		panic("Unable to load service account file")
+	}
+	pkey, err := ioutil.ReadFile(storageKeyPath)
+	if err != nil {
+		return nil, Response{Status: http.StatusNotFound, Error: "No private key found"}
+	}
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
 	defer cancel()
 	var image *ImageObjectsInfo
+	opts := &storage.SignedURLOptions{
+		GoogleAccessID: appconfig.SaEmail,
+		PrivateKey:     pkey,
+		Method:         "GET",
+		Expires:        time.Now().Add(15 * time.Minute),
+	}
 	rc, err := clu.cl.Bucket(clu.directory.bucketName).Object(fileName).Attrs(ctx)
+	u, err := storage.SignedURL(clu.directory.bucketName, rc.Name, opts)
 	if err != nil {
 		return nil, Response{Status: http.StatusNotFound, Error: err.Error()}
 	}
-
-	token := rc.Metadata["firebaseStorageDownloadTokens"]
 	image = &ImageObjectsInfo{
 		Name:     rc.Name,
-		ImageUrl: "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(rc.Name) + "?alt=media&token=" + token,
+		ImageUrl: u,
 	}
 
 	return image, Response{}
