@@ -68,7 +68,7 @@ func main() {
 	r.GET("/list/file/:path", routes.GetObject)
 	r.POST("/delete-files", routes.DeleteObjects)
 	r.POST("/upload", routes.UploadFiles)
-	r.POST("/upload/avatar", routes.UploadAvatar)
+	r.POST("/upload/user", routes.UploadToUser)
 	r.POST("/upload/cert", routes.UploadCertBadge)
 	r.POST("/folder/:jobid/create", routes.FolderCreation)
 	// Determine port for HTTP service.

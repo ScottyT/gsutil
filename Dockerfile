@@ -1,4 +1,4 @@
-FROM golang:1.17-buster as builder
+FROM golang:1.18.3-buster as builder
 
 # Create and change to the app directory.
 WORKDIR /app
@@ -29,6 +29,7 @@ WORKDIR /app
 COPY --from=builder /app/server /app/server
 COPY code-red.json /app/
 COPY code-red-app.pem /app/
+COPY cr-storage-key.pem /app/
 COPY app.env /app/
 
 # Run the web service on container startup.

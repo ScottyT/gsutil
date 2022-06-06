@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"gsutil/config"
+	"gsutil/generics"
 	"io"
 	"io/ioutil"
 	"log"
@@ -69,8 +70,6 @@ var su StorageUploader
 var appconfig *config.EnvConfig
 var fileslist FilesList
 
-var cmd *exec.Cmd
-
 func InitStorageClient(bucket string, client *storage.Client) {
 	appconfig = config.InitEnv()
 	su = StorageUploader{
@@ -80,7 +79,12 @@ func InitStorageClient(bucket string, client *storage.Client) {
 		cl:        client,
 		directory: &su,
 	}
-
+}
+func reverseArray(s []string) []string {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+	return s
 }
 func (c *command) download() string {
 	//cmd := exec.CommandContext(r.Context(), "/bin/bash", "script.sh", folder, dir)
@@ -92,22 +96,6 @@ func (c *command) download() string {
 		return err.Error()
 	}
 	return bytes.NewBuffer(out).String()
-}
-func (c *command) move() string {
-	cmd := exec.Command("gsutil", c.args...)
-	cmd.Stderr = os.Stderr
-	out, err := cmd.Output()
-	if err != nil {
-		return err.Error()
-	}
-	return bytes.NewBuffer(out).String()
-}
-
-func reverseArray(s []string) []string {
-	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
-		s[i], s[j] = s[j], s[i]
-	}
-	return s
 }
 
 func (clu *ClientUploader) List(prefix, delim string) ([]byte, Response) {
@@ -132,7 +120,7 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, Response) {
 			return nil, Response{Status: http.StatusBadRequest, Error: err.Error()}
 		}
 		if strings.Contains(attrs.ContentType, "image") {
-			sarr := reverseArray(strings.Split(attrs.Name, "/"))
+			sarr := generics.ReverseArrayGeneric(strings.Split(attrs.Name, "/"))
 			token := attrs.Metadata["firebaseStorageDownloadTokens"]
 			images = append(images, ImageObjectsInfo{
 				Name:       attrs.Name,
@@ -147,8 +135,9 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, Response) {
 				ImageUrl: "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(attrs.Name) + "?alt=media&token=" + token,
 			})
 		}
+
 		if attrs.Prefix != "" {
-			sarr := reverseArray(strings.Split(attrs.Prefix, "/"))
+			sarr := generics.ReverseArrayGeneric(strings.Split(attrs.Prefix, "/"))
 			folders = append(folders, FolderObjectsInfo{Name: sarr[1], Path: attrs.Prefix})
 		}
 		files = &FileObjectsInfo{Folders: folders, Images: images, Pdfs: pdfs}
@@ -181,6 +170,9 @@ func (clu *ClientUploader) ReadImage(fileName string) (*ImageObjectsInfo, Respon
 		Expires:        time.Now().Add(15 * time.Minute),
 	}
 	rc, err := clu.cl.Bucket(clu.directory.bucketName).Object(fileName).Attrs(ctx)
+	if err != nil {
+		return nil, Response{Status: http.StatusNotFound, Error: err.Error()}
+	}
 	u, err := storage.SignedURL(clu.directory.bucketName, rc.Name, opts)
 	if err != nil {
 		return nil, Response{Status: http.StatusNotFound, Error: err.Error()}
@@ -264,27 +256,11 @@ func (clu *ClientUploader) UploadImageInUser(file multipart.File, object string)
 	return imageUrl, Response{}
 }
 
-func (clu *ClientUploader) ComposeFile(object1, object2, toObject string) (string, error) {
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
-	defer cancel()
-	fmt.Println(clu.cl)
-	src1 := clu.cl.Bucket(clu.directory.bucketName).Object(object1)
-	src2 := clu.cl.Bucket(clu.directory.bucketName).Object(object2)
-	dst := clu.cl.Bucket(clu.directory.bucketName).Object(toObject)
-	_, err := dst.ComposerFrom(src1, src2).Run(ctx)
-	if err != nil {
-		return "", fmt.Errorf("ComposerFrom: %v", err)
-	}
-
-	return "Created composite obj", nil
-}
-
 func (clu *ClientUploader) Moving(object, destDir string) error {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
 	defer cancel()
-	objName := reverseArray(strings.Split(object, "/"))
+	objName := generics.ReverseArrayGeneric(strings.Split(object, "/"))
 	src := clu.cl.Bucket(clu.directory.bucketName).Object(object)
 	dst := clu.cl.Bucket(clu.directory.bucketName).Object(destDir + objName[0])
 	if _, err := dst.CopierFrom(src).Run(ctx); err != nil {
