@@ -106,6 +106,9 @@ func GetObject(c *gin.Context) {
 			bucketName: appconfig.StorageBucket,
 		}
 	}
+	respMessage = &Message{
+		message: "Read file!",
+	}
 	if c.Query("folder") == "" {
 		filename = c.Param("path") + "/"
 	} else {
@@ -121,6 +124,9 @@ func ListObjects(c *gin.Context) {
 	var files FileObjectsInfo
 	su = StorageUploader{
 		bucketName: appconfig.StorageBucket,
+	}
+	respMessage = &Message{
+		message: "Reading folders",
 	}
 	items, resp := uploader.List("", c.Query("delimiter"))
 	SendResponseError(c, resp)

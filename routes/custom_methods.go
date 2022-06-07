@@ -8,14 +8,12 @@ import (
 	"gsutil/config"
 	"gsutil/generics"
 	"io"
-	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,52 +21,6 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/api/iterator"
 )
-
-type FolderInfo struct {
-	FolderPath  string   `json:"folderPath"`
-	SourceFiles []string `json:"sourceFiles"`
-	DestFolder  string   `json:"destFolder"`
-}
-type FilesList struct {
-	Files []FilesList `json:"files"`
-}
-type ImageObjectsInfo struct {
-	Name       string `json:"name"`
-	ImageUrl   string `json:"imageUrl"`
-	FolderName string `json:"folderName"`
-}
-type FolderObjectsInfo struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-}
-type FileObjectsInfo struct {
-	Folders []FolderObjectsInfo `json:"folders"`
-	Images  []ImageObjectsInfo  `json:"images"`
-	Pdfs    []ImageObjectsInfo  `json:"pdfs"`
-}
-type ResponseImgArr struct {
-	downloadUrl string
-	files       []ImageObjectsInfo
-}
-
-type command struct {
-	name        string
-	respMessage string
-	args        []string
-}
-type ClientUploader struct {
-	cl        *storage.Client
-	directory *StorageUploader
-}
-type StorageUploader struct {
-	bucketName string
-	uploadPath string
-}
-
-var uploader *ClientUploader
-var su StorageUploader
-var appconfig *config.EnvConfig
-var fileslist FilesList
 
 func InitStorageClient(bucket string, client *storage.Client) {
 	appconfig = config.InitEnv()
@@ -80,12 +32,7 @@ func InitStorageClient(bucket string, client *storage.Client) {
 		directory: &su,
 	}
 }
-func reverseArray(s []string) []string {
-	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
-		s[i], s[j] = s[j], s[i]
-	}
-	return s
-}
+
 func (c *command) download() string {
 	//cmd := exec.CommandContext(r.Context(), "/bin/bash", "script.sh", folder, dir)
 	cmd := exec.Command("gsutil", c.args...)
@@ -102,10 +49,10 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, Response) {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
 	defer cancel()
-	var folders []FolderObjectsInfo
-	var images []ImageObjectsInfo
+	var folders []*FolderObjectsInfo
+	var images []*ImageObjectsInfo
 	var files *FileObjectsInfo
-	var pdfs []ImageObjectsInfo
+	var pdfs []*ImageObjectsInfo
 
 	it := clu.cl.Bucket(clu.directory.bucketName).Objects(ctx, &storage.Query{
 		Prefix:    prefix,
@@ -120,25 +67,18 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, Response) {
 			return nil, Response{Status: http.StatusBadRequest, Error: err.Error()}
 		}
 		if strings.Contains(attrs.ContentType, "image") {
-			sarr := generics.ReverseArrayGeneric(strings.Split(attrs.Name, "/"))
-			token := attrs.Metadata["firebaseStorageDownloadTokens"]
-			images = append(images, ImageObjectsInfo{
-				Name:       attrs.Name,
-				ImageUrl:   "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(attrs.Name) + "?alt=media&token=" + token,
-				FolderName: sarr[1],
-			})
+			GetFileObject[*ImageObjectsInfo](clu, attrs.Name, &ImageObjectsInfo{})
+
+			images = append(images, file)
 		}
 		if strings.Contains(attrs.ContentType, "pdf") {
-			token := attrs.Metadata["firebaseStorageDownloadTokens"]
-			pdfs = append(pdfs, ImageObjectsInfo{
-				Name:     attrs.Name,
-				ImageUrl: "https://firebasestorage.googleapis.com/v0/b/" + clu.directory.bucketName + "/o/" + url.QueryEscape(attrs.Name) + "?alt=media&token=" + token,
-			})
+			GetFileObject[*ImageObjectsInfo](clu, attrs.Name, &ImageObjectsInfo{})
+			pdfs = append(pdfs, file)
 		}
 
 		if attrs.Prefix != "" {
-			sarr := generics.ReverseArrayGeneric(strings.Split(attrs.Prefix, "/"))
-			folders = append(folders, FolderObjectsInfo{Name: sarr[1], Path: attrs.Prefix})
+			GetFileObject[*FolderObjectsInfo](clu, attrs.Prefix, &FolderObjectsInfo{})
+			folders = append(folders, folder)
 		}
 		files = &FileObjectsInfo{Folders: folders, Images: images, Pdfs: pdfs}
 	}
@@ -150,39 +90,21 @@ func (clu *ClientUploader) List(prefix, delim string) ([]byte, Response) {
 }
 
 func (clu *ClientUploader) ReadImage(fileName string) (*ImageObjectsInfo, Response) {
-	dir, _ := os.Getwd()
-	storageKeyPath, err := filepath.Abs(dir + "/cr-storage-key.pem")
-	if err != nil {
-		panic("Unable to load service account file")
-	}
-	pkey, err := ioutil.ReadFile(storageKeyPath)
-	if err != nil {
-		return nil, Response{Status: http.StatusNotFound, Error: "No private key found"}
-	}
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
 	defer cancel()
-	var image *ImageObjectsInfo
-	opts := &storage.SignedURLOptions{
-		GoogleAccessID: appconfig.SaEmail,
-		PrivateKey:     pkey,
-		Method:         "GET",
-		Expires:        time.Now().Add(15 * time.Minute),
-	}
+
 	rc, err := clu.cl.Bucket(clu.directory.bucketName).Object(fileName).Attrs(ctx)
 	if err != nil {
 		return nil, Response{Status: http.StatusNotFound, Error: err.Error()}
 	}
-	u, err := storage.SignedURL(clu.directory.bucketName, rc.Name, opts)
-	if err != nil {
-		return nil, Response{Status: http.StatusNotFound, Error: err.Error()}
-	}
-	image = &ImageObjectsInfo{
-		Name:     rc.Name,
-		ImageUrl: u,
+
+	GetFileObject[*ImageObjectsInfo](clu, rc.Name, &ImageObjectsInfo{})
+	if resp.Error != "" {
+		return nil, resp
 	}
 
-	return image, Response{}
+	return file, Response{}
 }
 
 func (clu *ClientUploader) Upload(files []*multipart.FileHeader, path string) ([]ImageObjectsInfo, Response) {
