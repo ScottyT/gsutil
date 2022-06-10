@@ -36,8 +36,6 @@ func SendResponseError(c *gin.Context, response Response) {
 
 func ExecCommand(com *command) (string, string, *bytes.Buffer) {
 	switch com.name {
-	case "moving":
-		return com.move(), com.respMessage, nil
 	case "download":
 		return com.download(), com.respMessage, nil
 	}
@@ -108,6 +106,9 @@ func GetObject(c *gin.Context) {
 			bucketName: appconfig.StorageBucket,
 		}
 	}
+	respMessage = &Message{
+		message: "Read file!",
+	}
 	if c.Query("folder") == "" {
 		filename = c.Param("path") + "/"
 	} else {
@@ -123,6 +124,9 @@ func ListObjects(c *gin.Context) {
 	var files FileObjectsInfo
 	su = StorageUploader{
 		bucketName: appconfig.StorageBucket,
+	}
+	respMessage = &Message{
+		message: "Reading folders",
 	}
 	items, resp := uploader.List("", c.Query("delimiter"))
 	SendResponseError(c, resp)
@@ -185,7 +189,7 @@ func UploadFiles(c *gin.Context) {
 	})
 }
 
-func UploadAvatar(c *gin.Context) {
+func UploadToUser(c *gin.Context) {
 	f, err := c.FormFile("single")
 	if err != nil {
 		SendResponseError(c, Response{Status: http.StatusBadRequest, Error: err.Error()})
